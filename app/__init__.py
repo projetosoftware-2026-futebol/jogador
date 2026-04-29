@@ -1,0 +1,1 @@
+"""Fut Manager player service."""
