@@ -1,77 +1,43 @@
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import Session
 
-from app.database import Base, get_db
-from app import main
-from app.models import JogadorModel
+from app.database import get_db
 
 
-engine = create_engine(
-    "sqlite://",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# -- Sistema ------------------------------------------------------------------
+
+def test_raiz(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.json() == {"servico": "jogador", "status": "online"}
 
 
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def test_health(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
-main.app.dependency_overrides[get_db] = override_get_db
+def test_get_db_entrega_sessao():
+    generator = get_db()
+    db = next(generator)
+
+    assert isinstance(db, Session)
+
+    generator.close()
 
 
-client = TestClient(main.app)
+# -- Jogadores ----------------------------------------------------------------
 
+def test_lista_todos_os_jogadores(client):
+    response = client.get("/jogadores")
 
-def jogadores_para_teste() -> list[JogadorModel]:
-    return [
-        JogadorModel(id=1, nome="Rafael Nunes", valor=8500000, rating=84, posicao="GOL"),
-        JogadorModel(id=2, nome="Caio Martins", valor=7400000, rating=81, posicao="LD"),
-        JogadorModel(id=3, nome="Bruno Reis", valor=7800000, rating=82, posicao="LE"),
-        JogadorModel(id=4, nome="Victor Rocha", valor=9000000, rating=85, posicao="ZAG"),
-        JogadorModel(id=5, nome="Andre Torres", valor=8300000, rating=83, posicao="ZAG"),
-        JogadorModel(id=6, nome="Lucas Menezes", valor=10000000, rating=87, posicao="MC"),
-        JogadorModel(id=7, nome="Mateus Castro", valor=9200000, rating=85, posicao="MC"),
-        JogadorModel(id=8, nome="Diego Ramos", valor=7900000, rating=82, posicao="MC"),
-        JogadorModel(id=9, nome="Igor Almeida", valor=11000000, rating=88, posicao="PE"),
-        JogadorModel(id=10, nome="Felipe Duarte", valor=12500000, rating=90, posicao="ATA"),
-        JogadorModel(id=11, nome="Thiago Lima", valor=10800000, rating=87, posicao="PD"),
-        JogadorModel(id=12, nome="Henrique Costa", valor=4100000, rating=73, posicao="GOL"),
-        JogadorModel(id=13, nome="Renan Lopes", valor=5200000, rating=76, posicao="LD"),
-        JogadorModel(id=14, nome="Pedro Vieira", valor=5600000, rating=77, posicao="LE"),
-        JogadorModel(id=15, nome="Gustavo Barros", valor=6400000, rating=79, posicao="ZAG"),
-        JogadorModel(id=16, nome="Marcos Freitas", valor=6900000, rating=80, posicao="MC"),
-        JogadorModel(id=17, nome="Samuel Pires", valor=7600000, rating=81, posicao="PE"),
-        JogadorModel(id=18, nome="Enzo Cardoso", valor=7100000, rating=80, posicao="PD"),
-        JogadorModel(id=19, nome="Daniel Moreira", valor=8800000, rating=84, posicao="ATA"),
-    ]
-
-
-@pytest.fixture(autouse=True)
-def resetar_banco():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    db.add_all(jogadores_para_teste())
-    db.commit()
-    db.close()
-
-
-def test_lista_todos_os_jogadores():
-    resposta = client.get("/jogadores")
-
-    assert resposta.status_code == 200
-    jogadores = resposta.json()
+    assert response.status_code == 200
+    jogadores = response.json()
     assert len(jogadores) == 19
     assert jogadores[0]["id"] == 1
+    assert jogadores[0]["status"] == "DISPONIVEL"
     assert {jogador["posicao"] for jogador in jogadores} == {
         "ATA",
         "PD",
@@ -84,47 +50,118 @@ def test_lista_todos_os_jogadores():
     }
 
 
-def test_obtem_jogador_por_id():
-    resposta = client.get("/jogadores/10")
+def test_get_alias_players(client):
+    response = client.get("/players")
 
-    assert resposta.status_code == 200
-    assert resposta.json()["nome"] == "Felipe Duarte"
-
-
-def test_jogador_inexistente_retorna_404():
-    resposta = client.get("/jogadores/999")
-
-    assert resposta.status_code == 404
-    assert resposta.json()["detail"] == "Jogador nao encontrado."
+    assert response.status_code == 200
+    assert len(response.json()) == 19
 
 
-def test_compra_e_venda_de_jogador():
+def test_obtem_jogador_por_id(client):
+    response = client.get("/jogadores/10")
+
+    assert response.status_code == 200
+    jogador = response.json()
+    assert jogador["id"] == 10
+    assert jogador["nome"] == "Felipe Duarte"
+    assert jogador["valor"] == 12_500_000
+    assert jogador["rating"] == 90
+
+
+def test_get_alias_player_por_id(client):
+    response = client.get("/players/2")
+
+    assert response.status_code == 200
+    assert response.json()["nome"] == "Caio Martins"
+
+
+def test_jogador_inexistente_retorna_404(client):
+    response = client.get("/jogadores/999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Jogador nao encontrado."
+
+
+# -- Transferencias -----------------------------------------------------------
+
+def test_compra_e_venda_de_jogador(client):
     compra = client.post("/jogadores/1/buy", json={"clube_id": 42})
 
     assert compra.status_code == 200
-    assert compra.json()["status"] == "COMPRADO"
-    assert compra.json()["clube_id"] == 42
+    comprado = compra.json()
+    assert comprado["status"] == "COMPRADO"
+    assert comprado["clube_id"] == 42
 
     venda = client.post("/jogadores/1/sell", json={"clube_id": 42})
 
     assert venda.status_code == 200
+    vendido = venda.json()
+    assert vendido["status"] == "DISPONIVEL"
+    assert vendido["clube_id"] is None
+
+
+def test_compra_e_venda_por_alias_players(client):
+    compra = client.post("/players/2/buy", json={"clube_id": 7})
+
+    assert compra.status_code == 200
+    assert compra.json()["clube_id"] == 7
+
+    venda = client.post("/players/2/sell", json={"clube_id": 7})
+
+    assert venda.status_code == 200
     assert venda.json()["status"] == "DISPONIVEL"
-    assert venda.json()["clube_id"] is None
 
 
-def test_nao_compra_jogador_ja_comprado():
-    client.post("/jogadores/2/buy", json={"clube_id": 7})
+def test_vende_jogador_sem_body(client):
+    client.post("/jogadores/3/buy", json={"clube_id": 11})
 
-    resposta = client.post("/jogadores/2/buy", json={"clube_id": 8})
+    response = client.post("/jogadores/3/sell")
 
-    assert resposta.status_code == 409
-    assert resposta.json()["detail"] == "Jogador ja pertence ao clube 7."
+    assert response.status_code == 200
+    assert response.json()["status"] == "DISPONIVEL"
+    assert response.json()["clube_id"] is None
 
 
-def test_nao_vende_jogador_de_outro_clube():
-    client.post("/jogadores/3/buy", json={"clube_id": 7})
+def test_nao_compra_jogador_ja_comprado(client):
+    client.post("/jogadores/4/buy", json={"clube_id": 7})
 
-    resposta = client.post("/jogadores/3/sell", json={"clube_id": 8})
+    response = client.post("/jogadores/4/buy", json={"clube_id": 8})
 
-    assert resposta.status_code == 409
-    assert resposta.json()["detail"] == "Jogador pertence a outro clube."
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Jogador ja pertence ao clube 7."
+
+
+def test_nao_compra_jogador_inexistente(client):
+    response = client.post("/jogadores/999/buy", json={"clube_id": 1})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Jogador nao encontrado."
+
+
+def test_nao_compra_com_clube_id_invalido(client):
+    response = client.post("/jogadores/5/buy", json={"clube_id": 0})
+
+    assert response.status_code == 422
+
+
+def test_nao_vende_jogador_disponivel(client):
+    response = client.post("/jogadores/6/sell", json={"clube_id": 1})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Jogador ja esta disponivel para compra."
+
+
+def test_nao_vende_jogador_de_outro_clube(client):
+    client.post("/jogadores/7/buy", json={"clube_id": 7})
+
+    response = client.post("/jogadores/7/sell", json={"clube_id": 8})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Jogador pertence a outro clube."
+
+
+def test_nao_vende_jogador_inexistente(client):
+    response = client.post("/jogadores/999/sell", json={"clube_id": 1})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Jogador nao encontrado."
