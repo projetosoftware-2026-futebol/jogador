@@ -5,7 +5,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jogadores.db")
+db_user = os.getenv("MYSQL_USER")
+db_password = os.getenv("MYSQL_PASSWORD")
+db_host = os.getenv("MYSQL_HOST")
+db_port = os.getenv("MYSQL_PORT")
+db_name = os.getenv("MYSQL_DATABASE")
+DATABASE_URL = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+if db_user and db_password and db_host and db_port and db_name:
+    DATABASE_URL = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
