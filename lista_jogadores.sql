@@ -1,4 +1,4 @@
-INSERT INTO jogadores (nome, rating, posicao, preco, liga, clube_id, status) VALUES
+INSERT INTO jogadores (nome, rating, posicao, valor, liga, clube_id, status) VALUES
 ('Mohamed Salah', 91, 'ATA', 95, 'Premier League', NULL, 'DISPONIVEL'),
 ('Erling Haaland', 90, 'ATA', 93, 'Premier League', NULL, 'DISPONIVEL'),
 ('Florian Wirtz', 89, 'MC', 87, 'Premier League', NULL, 'DISPONIVEL'),
