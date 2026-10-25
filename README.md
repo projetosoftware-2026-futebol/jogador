@@ -1,32 +1,58 @@
-# Fut Manager - Jogador
+# Player Service
 
-API REST responsavel pelo modulo de jogadores do Fut Manager.
+## Overview
 
-## Rodando localmente
+The **Player Service** is a REST API responsible for managing player records and market transactions within the Fut Manager ecosystem.
+
+> [!NOTE]
+> English aliases (such as `/players`) are supported alongside standard Portuguese route prefixes for full backward compatibility.
+
+---
+
+## Running Locally
+
+1. Install the required project dependencies:
 
 ```bash
 pip install -r requirements.txt
-fastapi dev app/main.py
+
 ```
 
-A documentacao interativa fica em `http://127.0.0.1:8000/docs`.
-
-## Banco de dados
-
-A API le os jogadores de uma tabela SQL chamada `jogadores`. Ela nao cria
-jogadores em codigo; os registros devem existir no banco usado pelo projeto.
-
-Por padrao, a aplicacao usa SQLite em `sqlite:///./jogadores.db`. Para usar
-outro banco, defina a variavel `DATABASE_URL` antes de iniciar a API:
+2. Start the development server using FastAPI:
 
 ```bash
-set DATABASE_URL=sqlite:///./jogadores.db
 fastapi dev app/main.py
+
 ```
 
-O arquivo `schema.sql` mostra a estrutura esperada da tabela.
+> [!TIP]
+> Once the server is running, interactive API documentation is available at `[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)`.
 
-## Modelo de jogador
+---
+
+## Database Configuration
+
+The API reads player records from an SQL table named `jogadores`. Records are expected to be pre-populated in the database rather than created directly through code.
+
+By default, the application uses SQLite at `sqlite:///./jogadores.db`. To configure a custom database, set the `DATABASE_URL` environment variable before starting the API:
+
+```bash
+# On Linux/macOS
+export DATABASE_URL="sqlite:///./jogadores.db"
+
+# On Windows (CMD)
+set DATABASE_URL=sqlite:///./jogadores.db
+
+fastapi dev app/main.py
+
+```
+
+> [!IMPORTANT]
+> Refer to the `schema.sql` file for the expected database table structure, constraints, and data types.
+
+---
+
+## Player Model
 
 ```json
 {
@@ -40,32 +66,45 @@ O arquivo `schema.sql` mostra a estrutura esperada da tabela.
 }
 ```
 
-Posicoes permitidas: `ATA`, `PD`, `PE`, `MC`, `LD`, `LE`, `ZAG`, `GOL`.
+### Allowed Positions
 
-## Rotas principais
+- **ATA** (Attacker)
+- **PD** (Right Winger)
+- **PE** (Left Winger)
+- **MC** (Midfielder)
+- **LD** (Right Back)
+- **LE** (Left Back)
+- **ZAG** (Center Back)
+- **GOL** (Goalkeeper)
 
-| Metodo | Rota | Descricao |
-| --- | --- | --- |
-| `GET` | `/jogadores` | Lista todos os jogadores |
-| `GET` | `/jogadores/{id}` | Busca um jogador especifico |
-| `POST` | `/jogadores/{id}/buy` | Compra um jogador para um clube |
-| `POST` | `/jogadores/{id}/sell` | Vende/libera um jogador |
-| `GET` | `/health` | Verifica se a API esta online |
+---
 
-### Comprar jogador
+## API Endpoints Reference
+
+| Method | Endpoint                     | Description                           |
+| ------ | ---------------------------- | ------------------------------------- |
+| `GET`  | `/jogadores` (or `/players`) | List all players                      |
+| `GET`  | `/jogadores/{id}`            | Retrieve a specific player by ID      |
+| `POST` | `/jogadores/{id}/buy`        | Purchase a player for a club          |
+| `POST` | `/jogadores/{id}/sell`       | Sell or release a player              |
+| `GET`  | `/health`                    | Check service health and availability |
+
+### Usage Examples
+
+#### Buy a Player
 
 ```bash
 curl -X POST http://127.0.0.1:8000/jogadores/1/buy \
   -H "Content-Type: application/json" \
   -d "{\"clube_id\": 42}"
+
 ```
 
-### Vender jogador
+#### Sell a Player
 
 ```bash
 curl -X POST http://127.0.0.1:8000/jogadores/1/sell \
   -H "Content-Type: application/json" \
   -d "{\"clube_id\": 42}"
-```
 
-Tambem existem aliases em ingles com `/players`.
+```
